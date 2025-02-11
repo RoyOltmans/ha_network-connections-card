@@ -40,7 +40,11 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
      ```
    - “/local/” maps to the `www` folder in Home Assistant.
 
-3. **Use the Custom Card**  
+3. **Single card panel**
+
+Make a single card panel, ensert the card in the single card panel it needs the space.
+
+4. **Use the Custom Card**  
    - In your Lovelace dashboard, add a **Manual Card** with:
      ```yaml
      type: custom:network-connections-card
