@@ -64,9 +64,9 @@ To fully utilize the card’s layout and zoom features, put the view in Panel Mo
 
 ### Usage
 1. View & Zoom
-- Scroll or pinch to zoom in/out.
-- Click-and-drag background to pan the graph.
-- If you grab an IP node, you can move it freely. Ports and the hub are pinned.
+  * Scroll or pinch to zoom in/out.
+  * Click-and-drag background to pan the graph.
+  * If you grab an IP node, you can move it freely. Ports and the hub are pinned.
 
 2. Positions
 
