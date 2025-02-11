@@ -85,10 +85,10 @@ If your data has direction (source vs. target), you can color or add arrow marke
   * Verify the resource URL is correct (/local/...) and type: module.
   * Ensure the custom card YAML references custom:network-connections-card.
 * No Data or Nodes?
- * Check if your entity actually has the connections attribute.
- * Ensure you spelled entity: correctly in the card config.
+  * Check if your entity actually has the connections attribute.
+  * Ensure you spelled entity: correctly in the card config.
 * Nodes Overlap?
- * Adjust collision radius in the JS code: .forceCollide().radius(...).
+  * Adjust collision radius in the JS code: .forceCollide().radius(...).
 
 ### License
 This card is distributed under the MIT License. Refer to LICENSE for details.
