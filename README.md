@@ -65,7 +65,7 @@ The card expects an attribute named `connections`, which is an array of objects 
 
 Your sensor’s state or attributes should expose this. The card automatically builds the force graph from these entries.
 
-### Panel Mode (Optional)
+### Panel Mode
 To fully utilize the card’s layout and zoom features, put the view in Panel Mode (so it can occupy the entire page).
 
 ### Sensor with network connections needed
