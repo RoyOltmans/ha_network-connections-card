@@ -9,6 +9,8 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
 - **Zoom & pan**: Scroll to zoom, drag to pan, drag nodes to reposition.  
 - **LocalStorage**: Node positions persist across reloads.
 
+![preview](/images/preview.png)
+
 ## Features
 
 1. **Bloom Layout**  
