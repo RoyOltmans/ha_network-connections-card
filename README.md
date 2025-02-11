@@ -42,7 +42,7 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
 
 3. **Single card panel**
 
-Make a single card panel, ensert the card in the single card panel it needs the space.
+   - Make a single card panel, ensert the card in the single card panel it needs the space.
 
 4. **Use the Custom Card**  
    - In your Lovelace dashboard, add a **Manual Card** with:
