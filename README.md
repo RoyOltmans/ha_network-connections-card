@@ -62,6 +62,21 @@ Your sensor’s state or attributes should expose this. The card automatically b
 ### Panel Mode (Optional)
 To fully utilize the card’s layout and zoom features, put the view in Panel Mode (so it can occupy the entire page).
 
+### Sensor with network connections needed
+
+Example sensor using netstat commandline stile (but can also be filled from a router etc) gathering connections configuration.yaml
+
+```yaml
+command_line:
+  - sensor:
+        name: Network Connections
+        command: "netstat -ntu | awk '{if (NR>2) print $4, $5}' | awk -F'[: ]+' '{print $(NF-3), $(NF-2), $(NF-1), $(NF)}' | grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+ [0-9]+ [0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+ [0-9]+$' | jq -c -R '[inputs | capture(\"(?<source>[0-9.]+) (?<sport>[0-9]+) (?<target>[0-9.]+) (?<port>[0-9]+)\") | {source, sport: ( .sport | tonumber ), target, port: ( .port | tonumber )}] | {connections: .}'"
+        value_template: "{{ value_json.connections | length }}"
+        json_attributes:
+            - connections
+        scan_interval: 60
+```
+
 ### Usage
 1. View & Zoom
   * Scroll or pinch to zoom in/out.
@@ -74,6 +89,7 @@ The card stores node positions in localStorage under a key like:
 ```
 networkPositions_sensor.my_network_connections
 ```
+
 If you need a fresh layout, open your browser dev tools and remove that key.
 
 3. Inbound/Outbound (Optional)
