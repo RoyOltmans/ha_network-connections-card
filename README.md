@@ -55,6 +55,7 @@ The card expects an attribute named `connections`, which is an array of objects 
   { "source": "192.168.2.10", "target": "8.8.8.8", "port": 443 },
   { "source": "192.168.2.11", "target": "192.168.2.5", "port": 80 }
 ]
+```
 
 Your sensor’s state or attributes should expose this. The card automatically builds the force graph from these entries.
 
