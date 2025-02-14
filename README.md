@@ -25,6 +25,11 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
 4. **Positions Saved**  
    Node positions (especially user drags) are stored in the browser’s localStorage, so your layout remains consistent on refresh.
 
+## New Release 0.0.2
+  - Instead of hard loading, implemented lazy loading
+  - If any data change happens a Delta operations starts on the model on element level instead of refereshing the whole model
+  - Animation and interaction is more fluid
+
 ## Installation
 
 1. **Place the Card File**  
