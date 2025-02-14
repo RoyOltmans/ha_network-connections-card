@@ -7,6 +7,7 @@ class NetworkConnectionsCard extends HTMLElement {
 
     this._nodesMap = {};
     this._links = [];
+    this._prevConnections = []; // For diffing
     this.simulation = null;
     this._positionsRestored = false;
     this._zoom = null;
@@ -33,7 +34,7 @@ class NetworkConnectionsCard extends HTMLElement {
           height: 100vh;
           margin: 0;
           padding: 0;
-          overflow: hidden; /* hide scrollbars; rely on pan/zoom */
+          overflow: hidden;
         }
         svg {
           width: 100%;
@@ -46,7 +47,6 @@ class NetworkConnectionsCard extends HTMLElement {
         }
       </style>
       <svg id="network-graph">
-        <!-- We'll attach arrow markers in <defs> here if not present -->
         <defs id="markers-defs"></defs>
         <g id="zoom-group"></g>
       </svg>
@@ -59,8 +59,6 @@ class NetworkConnectionsCard extends HTMLElement {
       throw new Error("You need to define an entity");
     }
     this.config = config;
-
-    // Define a default hub IP
     this.hubId = config.hubId || "192.168.2.1";
   }
 
@@ -74,11 +72,8 @@ class NetworkConnectionsCard extends HTMLElement {
     if (!state?.attributes?.connections) return;
 
     const now = Date.now();
-    // Throttle updates to every 5 seconds
-    if (now - this.lastUpdate < 5000) return;
+    if (now - this.lastUpdate < 5000) return; // Throttle updates
     this.lastUpdate = now;
-
-    // console.log("🔵 Data received:", state.attributes.connections);
 
     this._deltaUpdate(state.attributes.connections);
   }
@@ -88,22 +83,41 @@ class NetworkConnectionsCard extends HTMLElement {
   }
 
   /**
-   * MAIN: Filter out 127.0.0.1, pin hub + ports in star layout,
-   *       "bloom" IPs around each port, then an incremental update.
+   * Lazy-update: diff the new connections with the previous ones,
+   * then update the nodes and links accordingly.
    */
-  _deltaUpdate(connections) {
-    // Remove loopback
-    connections = connections.filter(({ source, target }) =>
+  _deltaUpdate(newConnections) {
+    // Filter out loopback entries.
+    const connections = newConnections.filter(({ source, target }) =>
       source !== "127.0.0.1" && target !== "127.0.0.1"
     );
 
-    // Center coords
+    // Helper to build a unique key for a connection.
+    const connectionKey = ({ source, target, port }) =>
+      `${source}_${target}_${port}`;
+
+    // Build sets for old and new connections.
+    const oldKeys = new Set(this._prevConnections.map(connectionKey));
+    const newKeys = new Set(connections.map(connectionKey));
+
+    // Determine added and removed connections.
+    const addedConnections = connections.filter(
+      (conn) => !oldKeys.has(connectionKey(conn))
+    );
+    const removedConnections = this._prevConnections.filter(
+      (conn) => !newKeys.has(connectionKey(conn))
+    );
+
+    // Save the latest connections.
+    this._prevConnections = connections;
+
+    // Center coordinates.
     const width = window.innerWidth;
     const height = window.innerHeight;
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Ensure hub pinned
+    // Ensure the hub is always present and pinned.
     if (!this._nodesMap[this.hubId]) {
       this._nodesMap[this.hubId] = {
         id: this.hubId,
@@ -113,11 +127,11 @@ class NetworkConnectionsCard extends HTMLElement {
       };
     }
 
-    // Gather ports in star layout
+    // Process ports with a star layout.
     const uniquePorts = Array.from(new Set(connections.map(c => c.port)));
     const portsPerStar = 8;
     const baseRadius = Math.min(width, height) * 0.3;
-    const ringSpacing = 150; 
+    const ringSpacing = 150;
     const starOuterRatio = 1.0;
     const starInnerRatio = 0.5;
 
@@ -131,12 +145,9 @@ class NetworkConnectionsCard extends HTMLElement {
         const starRadius = isOuter
           ? ringBase * starOuterRatio
           : ringBase * starInnerRatio;
-
         const angle = (2 * Math.PI / portsPerStar) * starIndex;
         const portX = centerX + Math.cos(angle) * starRadius;
         const portY = centerY + Math.sin(angle) * starRadius;
-
-        // pinned port
         this._nodesMap[portNodeId] = {
           id: portNodeId,
           type: "port",
@@ -147,49 +158,66 @@ class NetworkConnectionsCard extends HTMLElement {
       }
     });
 
-    // Build IP nodes & links
-    const newLinks = [];
-    connections.forEach(({ source, target, port }) => {
+    // Process added connections.
+    addedConnections.forEach(({ source, target, port }) => {
       const portNodeId = `port-${port}`;
 
-      // If "source" is an IP not present, place near port
       if (!this._nodesMap[source]) {
         this._nodesMap[source] = { id: source, type: "ip" };
         this._placeIpNearPort(source, portNodeId);
       }
-      // If "target" is an IP not present, place near port
       if (!this._nodesMap[target]) {
         this._nodesMap[target] = { id: target, type: "ip" };
         this._placeIpNearPort(target, portNodeId);
       }
 
-      // link IP(s) to port (undirected, but we'll label them for direction)
+      // Add links between IP and port.
       if (this._nodesMap[source].type === "ip") {
-        newLinks.push({ source, target: portNodeId });
+        this._links.push({ source, target: portNodeId });
       }
       if (this._nodesMap[target].type === "ip") {
-        newLinks.push({ source: portNodeId, target });
+        this._links.push({ source: portNodeId, target });
       }
     });
 
-    // Link each port to hub if desired
-    uniquePorts.forEach((port) => {
-      newLinks.push({
-        source: this.hubId,
-        target: `port-${port}`,
+    // Process removed connections.
+    removedConnections.forEach(({ source, target, port }) => {
+      const portNodeId = `port-${port}`;
+      this._links = this._links.filter((l) => {
+        const key = (l.source.id || l.source) + "->" + (l.target.id || l.target);
+        const removeKey1 = source + "->" + portNodeId;
+        const removeKey2 = portNodeId + "->" + target;
+        return key !== removeKey1 && key !== removeKey2;
       });
     });
 
-    // Sync old & new
-    this._syncNodesAndLinks(newLinks);
+    // Ensure each port is connected to the hub.
+    uniquePorts.forEach((port) => {
+      const hubPortLink = { source: this.hubId, target: `port-${port}` };
+      const exists = this._links.some((l) => {
+        const key = (l.source.id || l.source) + "->" + (l.target.id || l.target);
+        const desired = this.hubId + "->" + `port-${port}`;
+        return key === desired;
+      });
+      if (!exists) {
+        this._links.push(hubPortLink);
+      }
+    });
 
-    // Restore positions if not yet
-    if (!this._positionsRestored) {
-      this._restoreNodePositions();
-      this._positionsRestored = true;
-    }
+    // Remove nodes that are no longer referenced.
+    const usedNodeIds = new Set();
+    this._links.forEach((l) => {
+      usedNodeIds.add(l.source.id || l.source);
+      usedNodeIds.add(l.target.id || l.target);
+    });
+    usedNodeIds.add(this.hubId);
+    Object.keys(this._nodesMap).forEach((nid) => {
+      if (!usedNodeIds.has(nid)) {
+        delete this._nodesMap[nid];
+      }
+    });
 
-    // Create or update simulation
+    // --- Update or create the simulation ---
     if (!this.simulation) {
       this.simulation = d3.forceSimulation(Object.values(this._nodesMap))
         .force("link", d3.forceLink(this._links)
@@ -203,21 +231,19 @@ class NetworkConnectionsCard extends HTMLElement {
         .alphaMin(0.05)
         .on("tick", () => this._onTick());
     } else {
-      // Gentle "nudge" rather than abrupt
       this.simulation.nodes(Object.values(this._nodesMap));
       this.simulation.force("link").links(this._links);
-      this.simulation.alphaTarget(0.2).restart();
-      setTimeout(() => {
-        this.simulation?.alphaTarget(0);
-      }, 1000);
+      // Instead of forcing an alpha target and resetting it later,
+      // we gently restart the simulation by setting a new alpha value.
+      this.simulation.alpha(0.3).restart();
     }
 
-    // Render
+    // Update the D3 rendering using data joins.
     this._renderD3();
   }
 
   /**
-   * Place IP near its port so it starts in a bloom around the port.
+   * Place an IP node near its corresponding port.
    */
   _placeIpNearPort(ipId, portNodeId) {
     const portNode = this._nodesMap[portNodeId];
@@ -230,40 +256,13 @@ class NetworkConnectionsCard extends HTMLElement {
     this._nodesMap[ipId].y = ipY;
   }
 
-  _syncNodesAndLinks(newLinks) {
-    const linkKey = (l) => (l.source.id || l.source) + "->" + (l.target.id || l.target);
-    const newLinkSet = new Set(newLinks.map(linkKey));
-
-    this._links = this._links.filter((oldL) => newLinkSet.has(linkKey(oldL)));
-    const oldLinkSet = new Set(this._links.map(linkKey));
-    newLinks.forEach((nl) => {
-      if (!oldLinkSet.has(linkKey(nl))) {
-        this._links.push(nl);
-      }
-    });
-
-    const usedNodeIds = new Set();
-    this._links.forEach((l) => {
-      usedNodeIds.add(l.source.id || l.source);
-      usedNodeIds.add(l.target.id || l.target);
-    });
-    usedNodeIds.add(this.hubId);
-
-    Object.keys(this._nodesMap).forEach((nid) => {
-      if (!usedNodeIds.has(nid)) {
-        delete this._nodesMap[nid];
-      }
-    });
-  }
-
   /**
-   * Render nodes, links, labels. Also define arrow markers for inbound/outbound.
+   * Render (or update) nodes, links, and labels using D3 data joins.
    */
   _renderD3() {
     const svg = d3.select(this.shadowRoot.querySelector("#network-graph"));
     const g = svg.select("#zoom-group");
 
-    // If zoom not set up, do it now
     if (!this._zoom) {
       this._zoom = d3.zoom()
         .scaleExtent([0.3, 5])
@@ -273,73 +272,61 @@ class NetworkConnectionsCard extends HTMLElement {
       svg.call(this._zoom);
     }
 
-    // 1) Ensure arrow markers exist
     this._setupArrowMarkers(svg);
 
-    // 2) Data join on links
+    // Data join for links.
     const linkSel = g.selectAll("line.link")
-      .data(this._links, (d) => (d.source.id || d.source) + "_" + (d.target.id || d.target));
-
+      .data(this._links, d => (d.source.id || d.source) + "_" + (d.target.id || d.target));
     linkSel.exit().remove();
     const linkEnter = linkSel.enter()
       .append("line")
-      .attr("class", "link");
-
-    // Merge
-    const linkMerged = linkSel.merge(linkEnter);
-
-    // Set color + arrow for inbound/outbound/hub
-    linkMerged
-      .attr("stroke-width", 2)
-      .attr("stroke", (d) => {
-        if (this._isInbound(d)) return "green";   // IP->port
-        if (this._isOutbound(d)) return "orange"; // port->IP
-        return "#6fa3ef"; // default (hub or unknown)
+      .attr("class", "link")
+      .attr("stroke-width", 2);
+    linkSel.merge(linkEnter)
+      .attr("stroke", d => {
+        if (this._isInbound(d)) return "green";
+        if (this._isOutbound(d)) return "orange";
+        return "#6fa3ef";
       })
-      .attr("marker-end", (d) => {
-        if (this._isInbound(d)) return "url(#arrowInbound)";   // green arrow
-        if (this._isOutbound(d)) return "url(#arrowOutbound)"; // orange arrow
-        return null; // no arrow for hub<->port
+      .attr("marker-end", d => {
+        if (this._isInbound(d)) return "url(#arrowInbound)";
+        if (this._isOutbound(d)) return "url(#arrowOutbound)";
+        return null;
       });
 
-    // 3) Data join on nodes
+    // Data join for nodes.
     const nodeSel = g.selectAll("circle.node")
-      .data(Object.values(this._nodesMap), (d) => d.id);
-
+      .data(Object.values(this._nodesMap), d => d.id);
     nodeSel.exit().remove();
     const nodeEnter = nodeSel.enter()
       .append("circle")
       .attr("class", "node")
-      .attr("r", (d) => d.type === "port" ? 12 : d.type === "hub" ? 20 : 10)
-      .attr("fill", (d) => {
-        if (d.type === "hub") return "#2ecc71";   // green
-        if (d.type === "port") return "#ff5733";  // red/orange
-        return "#f39c12";                         // IP
-      })
       .call(
         d3.drag()
           .on("start", (event, d) => this._dragStarted(event, d))
           .on("drag", (event, d) => this._dragged(event, d))
           .on("end", (event, d) => this._dragEnded(event, d))
       );
+    nodeSel.merge(nodeEnter)
+      .attr("r", d => d.type === "port" ? 12 : d.type === "hub" ? 20 : 10)
+      .attr("fill", d => {
+        if (d.type === "hub") return "#2ecc71";
+        if (d.type === "port") return "#ff5733";
+        return "#f39c12";
+      });
 
-    nodeSel.merge(nodeEnter);
-
-    // 4) Data join on labels
+    // Data join for labels.
     const labelSel = g.selectAll("text.label")
-      .data(Object.values(this._nodesMap), (d) => d.id);
-
+      .data(Object.values(this._nodesMap), d => d.id);
     labelSel.exit().remove();
     const labelEnter = labelSel.enter()
       .append("text")
       .attr("class", "label")
       .attr("dx", 15)
-      .attr("dy", 4)
-      .text((d) => d.label || d.id);
+      .attr("dy", 4);
+    labelSel.merge(labelEnter)
+      .text(d => d.label || d.id);
 
-    labelSel.merge(labelEnter);
-
-    // 5) Optional: initial zoom out
     if (!this._hasInitialZoom) {
       this._hasInitialZoom = true;
       const w = window.innerWidth;
@@ -355,13 +342,11 @@ class NetworkConnectionsCard extends HTMLElement {
   }
 
   /**
-   * Define arrow markers in <defs> if not already present.
-   * We'll create two: #arrowInbound (green) and #arrowOutbound (orange).
+   * Define arrow markers for inbound (green) and outbound (orange) links.
    */
   _setupArrowMarkers(svg) {
     const defs = svg.select("#markers-defs");
     if (defs.select("#arrowInbound").empty()) {
-      // inbound arrow
       defs.append("marker")
         .attr("id", "arrowInbound")
         .attr("viewBox", "0 -5 10 10")
@@ -375,7 +360,6 @@ class NetworkConnectionsCard extends HTMLElement {
         .attr("fill", "green");
     }
     if (defs.select("#arrowOutbound").empty()) {
-      // outbound arrow
       defs.append("marker")
         .attr("id", "arrowOutbound")
         .attr("viewBox", "0 -5 10 10")
@@ -391,58 +375,52 @@ class NetworkConnectionsCard extends HTMLElement {
   }
 
   /**
-   * Helper: inbound = IP -> port
+   * Helper: returns true if the link is inbound (IP -> port).
    */
   _isInbound(d) {
     const s = this._getNodeType(d.source);
     const t = this._getNodeType(d.target);
-    return (s === "ip" && t === "port");
+    return s === "ip" && t === "port";
   }
 
   /**
-   * Helper: outbound = port -> IP
+   * Helper: returns true if the link is outbound (port -> IP).
    */
   _isOutbound(d) {
     const s = this._getNodeType(d.source);
     const t = this._getNodeType(d.target);
-    return (s === "port" && t === "ip");
+    return s === "port" && t === "ip";
   }
 
   /**
-   * Return the 'type' of a node reference (which might be an object or ID).
+   * Return the type of a node (object or string reference).
    */
   _getNodeType(ref) {
-    // ref might be an object with .type, or a string if uninitialized
     if (typeof ref === "object") {
       return ref.type;
     } else {
-      // Look up in _nodesMap
       const nodeObj = this._nodesMap[ref];
       return nodeObj ? nodeObj.type : undefined;
     }
   }
 
   /**
-   * Force simulation tick => update positions
+   * Update positions on each simulation tick.
    */
   _onTick() {
     const g = d3.select(this.shadowRoot.querySelector("#zoom-group"));
-
     g.selectAll("line.link")
-      .attr("x1", (d) => d.source.x)
-      .attr("y1", (d) => d.source.y)
-      .attr("x2", (d) => d.target.x)
-      .attr("y2", (d) => d.target.y);
-
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
     g.selectAll("circle.node")
-      .attr("cx", (d) => d.x)
-      .attr("cy", (d) => d.y);
-
+      .attr("cx", d => d.x)
+      .attr("cy", d => d.y);
     g.selectAll("text.label")
-      .attr("x", (d) => d.x + 10)
-      .attr("y", (d) => d.y + 5);
+      .attr("x", d => d.x + 10)
+      .attr("y", d => d.y + 5);
 
-    // Save positions once mostly settled
     if (this.simulation.alpha() < 0.05) {
       this._saveNodePositions();
     }
@@ -462,7 +440,6 @@ class NetworkConnectionsCard extends HTMLElement {
 
   _dragEnded(event, d) {
     if (!event.active) this.simulation.alphaTarget(0);
-    // Keep hub & ports pinned, IP addresses float
     if (d.type === "ip") {
       d.fx = null;
       d.fy = null;
@@ -494,10 +471,9 @@ class NetworkConnectionsCard extends HTMLElement {
     try {
       saved = JSON.parse(localStorage.getItem(storageKey));
     } catch (err) {
-      // ignore parse errors
+      // Ignore errors.
     }
     if (!saved) return;
-
     Object.entries(saved).forEach(([id, pos]) => {
       const node = this._nodesMap[id];
       if (node) {
