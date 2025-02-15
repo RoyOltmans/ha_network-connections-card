@@ -30,6 +30,10 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
   - If any data change happens a Delta operations starts on the model on element level instead of refereshing the whole model
   - Animation and interaction is more fluid
 
+## New Releae 0.0.3
+  - Nickrout added HACS support with added features from tom_l
+  - Renamed files to fix the manual and support HACS
+
 ## Installation
 
 ### HACS
