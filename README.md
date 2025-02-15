@@ -47,7 +47,7 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
    - Go to Home Assistant → **Settings** → **Dashboards** → **Resources**.  
    - Create a new resource:
      ```yaml
-     url: /local/network-connections-card.js
+     url: /local/ha_network-connections-card.js
      type: module
      ```
    - “/local/” maps to the `www` folder in Home Assistant.
