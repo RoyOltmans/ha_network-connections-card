@@ -32,6 +32,13 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
 
 ## Installation
 
+### HACS
+
+1. Add this repository as a custom HACS repository with type 'Dashboard'.
+2. Install the card.
+
+### Manual
+
 1. **Place the Card File**  
    - Download `network-connections-card.js` from this repository.  
    - Put it into your Home Assistant `www/` directory (e.g., `<config>/www/network-connections-card.js`).
