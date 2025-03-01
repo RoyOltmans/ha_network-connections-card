@@ -42,7 +42,7 @@ class NetworkConnectionsCard extends HTMLElement {
           background: transparent;
         }
         text {
-          fill: black;
+          fill: var(--primary-text-color, black);
           font-size: 14px;
         }
       </style>
