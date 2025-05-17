@@ -1,6 +1,8 @@
 {
   "name": "Network Connections Card",
   "content_in_root": true,
-  "filename": "ha_network-connections-card.js"
+  "filename": "ha_network-connections-card.js",
+  "type": "lovelace",
+  "description": "Force-directed graph for network connections in Home Assistant.",
+  "render_readme": true
 }
-  
