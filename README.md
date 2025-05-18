@@ -9,7 +9,7 @@ A **custom Lovelace card** for **Home Assistant** that visualizes network connec
 - **Zoom & pan**: Scroll to zoom, drag to pan, drag nodes to reposition.  
 - **LocalStorage**: Node positions persist across reloads.
 
-![preview](/images/preview.png)
+![Network Connections Card Preview](https://raw.githubusercontent.com/RoyOltmans/ha_network-connections-card/main/images/preview.png)
 
 ## Features
 
